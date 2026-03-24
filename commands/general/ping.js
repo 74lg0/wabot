@@ -7,8 +7,13 @@ module.exports = {
 
     ejecutar: async (sock, msg, args, { prefix }) => {
         const inicio = Date.now();
+
+        await sock.sendMessage(msg.key.remoteJid, { text: "🏓 Pong!" });
+
+        const ms = Date.now() - inicio;
+
         await sock.sendMessage(msg.key.remoteJid, {
-            text: `🏓 Pong! *${Date.now() - inicio}ms*\nPrefijo: *${prefix}*`
+            text: `⚡ *${ms}ms*\nPrefijo: *${prefix}*`
         });
     }
 };
