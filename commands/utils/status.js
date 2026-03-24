@@ -1,26 +1,12 @@
 const { execFile } = require("child_process");
-const { aliases } = require("../admins/reset");
 
 module.exports = {
     nombre: "status",
-    aliases: ["estado", "bot-status"],
     categoria: "Utilidades",
     descripcion: "Muestra el estado actual del bot",
     uso: "status",
 
     ejecutar: async (sock, msg, args, { config }) => {
-        const senderJid = msg.key.participant || msg.key.remoteJid;
-        const ownerJid = config.ownerNumber + "@s.whatsapp.net";
-
-        const esOwner = senderJid === ownerJid;
-        const esBot = msg.key.fromMe;
-
-        if (!esOwner && !esBot) {
-            return sock.sendMessage(msg.key.remoteJid, {
-                text: "❌ No tienes permiso para ejecutar este comando."
-            });
-        }
-
         execFile("pm2", ["jlist"], (error, stdout) => {
             if (error) {
                 return sock.sendMessage(msg.key.remoteJid, {
