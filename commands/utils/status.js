@@ -1,4 +1,8 @@
 const { execFile } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+
+const GIF_PATH = path.join(__dirname, "../../src/status_gf.mp4");
 
 module.exports = {
     nombre: "status",
@@ -7,9 +11,11 @@ module.exports = {
     uso: "status",
 
     ejecutar: async (sock, msg, args, { config }) => {
-        execFile("pm2", ["jlist"], (error, stdout) => {
+        const jid = msg.key.remoteJid;
+
+        execFile("pm2", ["jlist"], async (error, stdout) => {
             if (error) {
-                return sock.sendMessage(msg.key.remoteJid, {
+                return sock.sendMessage(jid, {
                     text: `❌ No se pudo obtener el estado.\n${error.message}`
                 }).catch(() => {});
             }
@@ -19,7 +25,7 @@ module.exports = {
                 const bot = lista.find(p => p.name === "74lg0-WaBot") || lista[0];
 
                 if (!bot) {
-                    return sock.sendMessage(msg.key.remoteJid, {
+                    return sock.sendMessage(jid, {
                         text: "❌ No se encontró ningún proceso pm2 activo."
                     }).catch(() => {});
                 }
@@ -40,10 +46,20 @@ module.exports = {
                     `Memory   : ${mem}`,
                 ].join("\n");
 
-                sock.sendMessage(msg.key.remoteJid, { text: texto }).catch(() => {});
+                // Enviar gif + texto como caption si existe, si no solo texto
+                if (fs.existsSync(GIF_PATH)) {
+                    await sock.sendMessage(jid, {
+                        video: fs.readFileSync(GIF_PATH),
+                        caption: texto,
+                        gifPlayback: true,
+                        mimetype: "video/mp4"
+                    }).catch(() => {});
+                } else {
+                    await sock.sendMessage(jid, { text: texto }).catch(() => {});
+                }
 
             } catch (e) {
-                sock.sendMessage(msg.key.remoteJid, {
+                sock.sendMessage(jid, {
                     text: `❌ Error al parsear respuesta de pm2.`
                 }).catch(() => {});
             }
