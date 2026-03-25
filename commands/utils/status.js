@@ -2,7 +2,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const GIF_PATH = path.join(__dirname, "../../src/status_gf.mp4");
+const GIF_PATH = path.join(__dirname, "../../src/gifs_/status_gf.mp4");
 
 module.exports = {
     nombre: "status",

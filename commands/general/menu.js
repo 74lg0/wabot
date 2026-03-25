@@ -49,7 +49,7 @@ module.exports = {
             `[CMDS] ${totalCmds} loaded 💾`,
             `[CATS] ${totalCats} modules 🗂️`,
             secciones.trimEnd(),
-            `\n~ use *${prefix}<command>* to execute.`
+            `\n~ use *${prefix}<command>* to execute the command.`
         ].join("\n");
 
         // ── Enviar imagen + caption ───────────────────────────────────────
