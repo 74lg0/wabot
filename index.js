@@ -10,8 +10,9 @@ const fs = require("fs");
 const { cargarComandos } = require("./commands/loader");
 const { manejarMensajes } = require("./handlers/messageHandler");
 const { manejarConexion } = require("./handlers/connectionHandler");
+const { iniciarScheduler } = require("./handlers/scheduler");
 
-// Cargar config
+// ── Cargar config ─────────────────────────────────────────────────────────────
 const CONFIG_PATH = "./config.json";
 if (!fs.existsSync(CONFIG_PATH)) {
     console.error("❌ No se encontró config.json en la raíz del proyecto");
@@ -19,11 +20,11 @@ if (!fs.existsSync(CONFIG_PATH)) {
 }
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
 
-// Cargar comandos
+// ── Cargar comandos ───────────────────────────────────────────────────────────
 const comandos = cargarComandos();
 console.log(`📦 ${comandos.size} entradas de comandos cargadas\n`);
 
-// Arranque del bot
+// ── Arranque del bot ──────────────────────────────────────────────────────────
 async function iniciarBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth");
     const { version } = await fetchLatestBaileysVersion();
@@ -38,8 +39,9 @@ async function iniciarBot() {
 
     sock.ev.on("creds.update", saveCreds);
 
-    manejarConexion(sock, iniciarBot);   // pasa la función, no la llama
+    manejarConexion(sock, iniciarBot);
     manejarMensajes(sock, comandos, config);
+    iniciarScheduler(sock); // ← dentro de iniciarBot, donde sock ya existe
 
     console.log(`🤖 Bot iniciado | Prefijo: "${config.prefix}" | v${version.join(".")}`);
 }
