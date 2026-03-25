@@ -16,22 +16,21 @@ function extraerTexto(msg) {
  * Registra el listener de mensajes en el socket.
  */
 function manejarMensajes(sock, comandos, config) {
-    const prefix = config.prefix || "?";
-    const prefixEscapado = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regexPrefix = new RegExp(`^${prefixEscapado}`);
-    // const ownerJid = config.ownerNumber + "@s.whatsapp.net";
+    // ── El prefix ahora es dinámico por grupo ─────────────────────────────
+    function getPrefix(jid) {
+        return config.prefixes?.[jid] || config.defaultPrefix || "?";
+    }
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
         if (!msg?.message) return;
-
-        // Ignorar mensajes del bot, pero permitir al owner
-        // (Descomenta si el bot y tu número son distintos)
-        // const senderJid = msg.key.participant || msg.key.remoteJid;
-        // if (msg.key.fromMe && senderJid !== ownerJid) return;
-
-        // Filtro de contexto: solo grupos (elimina la condición para privados también)
         if (!msg.key.remoteJid.endsWith("@g.us")) return;
+
+        const jid = msg.key.remoteJid;
+        const prefix = getPrefix(jid);
+
+        const prefixEscapado = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regexPrefix = new RegExp(`^${prefixEscapado}`);
 
         const texto = extraerTexto(msg);
         if (!texto || !regexPrefix.test(texto)) return;
@@ -46,11 +45,11 @@ function manejarMensajes(sock, comandos, config) {
         if (!cmd) return;
 
         try {
-            console.log(`[CMD] ${prefix}${nombreCmd} | Args: ${partes.join(" ")} | JID: ${msg.key.remoteJid}`);
+            console.log(`[CMD] ${prefix}${nombreCmd} | Args: ${partes.join(" ")} | JID: ${jid}`);
             await cmd.ejecutar(sock, msg, partes, { prefix, comandos, config });
         } catch (err) {
             console.error(`[ERROR] Comando "${nombreCmd}":`, err);
-            await sock.sendMessage(msg.key.remoteJid, {
+            await sock.sendMessage(jid, {
                 text: `❌ Error al ejecutar *${nombreCmd}*`
             }).catch(() => {});
         }

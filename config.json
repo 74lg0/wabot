@@ -1,5 +1,8 @@
 {
-    "prefix": "?",
-    "botName": "74lg0-WaBot",
-    "ownerNumber": ""
+    "botName": "74lg0 WaBot",
+    "ownerNumber": "525573642254",
+    "defaultPrefix": "?",
+    "prefixes": {
+        "120363424187739667@g.us": "?"
+    }
 }

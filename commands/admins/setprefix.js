@@ -1,11 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 
+const CONFIG_PATH = path.join(__dirname, "../../config.json");
+
 module.exports = {
     nombre: "setprefix",
     aliases: ["prefix", "changeprefix"],
     categoria: "Admin",
-    descripcion: "Cambia el prefijo del bot",
+    descripcion: "Cambia el prefijo del bot en este grupo",
     uso: "setprefix <nuevo_prefijo>",
 
     ejecutar: async (sock, msg, args, { prefix, config }) => {
@@ -13,7 +15,7 @@ module.exports = {
         const senderJid = msg.key.participant || msg.key.remoteJid;
         const ownerJid = config.ownerNumber + "@s.whatsapp.net";
 
-        // ── Verificar permisos: owner o admin del grupo ───────────────────
+        // ── Verificar permisos ────────────────────────────────────────────
         const esOwner = senderJid === ownerJid || msg.key.fromMe;
         let esAdmin = false;
 
@@ -48,13 +50,22 @@ module.exports = {
             });
         }
 
-        // ── Guardar en config.json ────────────────────────────────────────
-        const CONFIG_PATH = path.join(__dirname, "../../config.json");
-        config.prefix = nuevoPrefix;
+        if (nuevoPrefix === prefix) {
+            return sock.sendMessage(jid, {
+                text: `❌ El prefijo ya es *${prefix}*`
+            });
+        }
+
+        // ── Guardar prefix por grupo ──────────────────────────────────────
+        if (!config.prefixes) config.prefixes = {};
+        config.prefixes[jid] = nuevoPrefix;
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 4));
 
+        // ── Aviso + reinicio ──────────────────────────────────────────────
         await sock.sendMessage(jid, {
-            text: `✅ Prefijo cambiado: *${prefix}* → *${nuevoPrefix}*\n\nReinicia el bot para aplicar el cambio.\n*${nuevoPrefix}reset*`
+            text: `⚠️ *¡Se ha cambiado el prefijo del bot de ${prefix} a ${nuevoPrefix}!* ⚠️\n_Reiniciando Bot… Esto puede demorar unos segundos_`
         });
+
+        setTimeout(() => process.exit(0), 1500);
     }
 };
