@@ -1,118 +1,168 @@
-#!/usr/bin/env python3
-import sys
-import os
-import json
-import yt_dlp
+const { execFile } = require("child_process");
+const path = require("path");
+const fs = require("fs");
+const https = require("https");
 
-MAX_AUDIO_SECONDS = 15 * 60
-MAX_VIDEO_SECONDS = 10 * 60
+const AUDIO_DIR = path.join(__dirname, "../../src/aud");
+const VIDEO_DIR = path.join(__dirname, "../../src/vid");
+const SCRIPT    = path.join(__dirname, "../../scripts/playt.py");
 
-def obtener_info(query):
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-    }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        data = ydl.extract_info(f"ytsearch1:{query}", download=False)
-        if "entries" in data and data["entries"]:
-            entry = data["entries"][0]
-            return {
-                "url":      f"https://www.youtube.com/watch?v={entry['id']}",
-                "title":    entry.get("title", "Sin título"),
-                "uploader": entry.get("uploader") or entry.get("channel", "Desconocido"),
-                "duration": entry.get("duration", 0),
-                "thumbnail": entry.get("thumbnail", ""),
+function descargarThumb(url, destino) {
+    return new Promise((res, rej) => {
+        const file = fs.createWriteStream(destino);
+        https.get(url, (response) => {
+            response.pipe(file);
+            file.on("finish", () => file.close(res));
+        }).on("error", rej);
+    });
+}
+
+function formatDuration(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = String(seconds % 60).padStart(2, "0");
+    return `${m}:${s}`;
+}
+
+function runScript(args) {
+    return new Promise((resolve, reject) => {
+        execFile("python3", [SCRIPT, ...args], (execErr, stdout, stderr) => {
+            if (execErr) return reject(new Error(stderr?.trim() || execErr.message));
+            try {
+                const ultimaLinea = stdout.trim().split("\n").pop();
+                resolve(JSON.parse(ultimaLinea));
+            } catch {
+                reject(new Error(`JSON inválido: ${stdout?.trim()?.slice(0, 200)}`));
             }
-    return None
+        });
+    });
+}
 
-def bajar_audio(url, carpeta):
-    opts = {
-        "format": "bestaudio",
-        "outtmpl": os.path.join(carpeta, "%(id)s.%(ext)s"),
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
+module.exports = {
+    nombre: "play",
+    aliases: ["yt"],
+    categoria: "Utilidades",
+    descripcion: "Descarga audio o video de YouTube",
+    uso: "play --audio <canción> | play --video <canción>",
+
+    ejecutar: async (sock, msg, args, { prefix }) => {
+        const jid = msg.key.remoteJid;
+
+        const modo = args[0]?.toLowerCase();
+        if (modo !== "--audio" && modo !== "--video") {
+            return sock.sendMessage(jid, {
+                text: `Uso:\n  *${prefix}play --audio <canción>*\n  *${prefix}play --video <video>*`
+            });
+        }
+
+        const query = args.slice(1).join(" ");
+        if (!query) {
+            return sock.sendMessage(jid, {
+                text: `❌ Escribe el nombre de la canción o video.\nEjemplo: *${prefix}play --audio Bohemian Rhapsody*`
+            });
+        }
+
+        const tipo      = modo === "--audio" ? "audio" : "video";
+        const outputDir = tipo === "audio" ? AUDIO_DIR : VIDEO_DIR;
+
+        // ── PASO 1: obtener info sin descargar ────────────────────────────
+        let meta;
+        try {
+            meta = await runScript(["info", query, outputDir]);
+        } catch (err) {
+            console.error("[PLAY] Error en info:", err.message);
+            return sock.sendMessage(jid, {
+                text: `❌ No se pudo buscar *${query}*.\n*Detalle:* ${err.message}`
+            }).catch(() => {});
+        }
+
+        if (!meta.ok) {
+            return sock.sendMessage(jid, { text: `❌ ${meta.error}` }).catch(() => {});
+        }
+
+        // ── Validar duración ──────────────────────────────────────────────
+        const bloqueado = tipo === "audio" ? meta.blocked_audio : meta.blocked_video;
+        const limite    = tipo === "audio" ? "15:00" : "10:00";
+
+        if (bloqueado) {
+            return sock.sendMessage(jid, {
+                text: `🚫 _Acción Bloqueada… ¡El ${tipo} debe durar menos de ${limite}m_`
+            }).catch(() => {});
+        }
+
+        const duracionFmt = formatDuration(meta.duration);
+
+        // ── PASO 2: descargar thumbnail y mandar info AL TIRO ─────────────
+        const thumbPath = path.join(outputDir, "_thumb_tmp.jpg");
+        try {
+            await descargarThumb(meta.thumbnail, thumbPath);
+        } catch (thumbErr) {
+            console.warn("[PLAY] Thumbnail falló:", thumbErr.message);
+        }
+
+        const caption = [
+            `Video/Título ~> *${meta.title}*`,
+            `Autor ~> *${meta.uploader}*`,
+            `Duración ~> *${duracionFmt}*`,
+            ``,
+            `_Enviando el ${tipo}… Esto puede demorar unos minutos ⌛_`
+        ].join("\n");
+
+        if (fs.existsSync(thumbPath)) {
+            await sock.sendMessage(jid, {
+                image: fs.readFileSync(thumbPath),
+                caption
+            }).catch(() => {});
+            fs.unlink(thumbPath, () => {});
+        } else {
+            await sock.sendMessage(jid, { text: caption }).catch(() => {});
+        }
+
+        // ── PASO 3: descargar archivo ─────────────────────────────────────
+        let descarga;
+        try {
+            descarga = await runScript([tipo, meta.url, outputDir]);
+        } catch (err) {
+            console.error("[PLAY] Error en descarga:", err.message);
+            return sock.sendMessage(jid, {
+                text: `❌ Error al descargar.\n*Detalle:* ${err.message}`
+            }).catch(() => {});
+        }
+
+        if (!descarga.ok) {
+            return sock.sendMessage(jid, { text: `❌ ${descarga.error}` }).catch(() => {});
+        }
+
+        if (!fs.existsSync(descarga.path)) {
+            console.error("[PLAY] Archivo no encontrado:", descarga.path);
+            return sock.sendMessage(jid, {
+                text: `❌ No se encontró el archivo descargado.`
+            }).catch(() => {});
+        }
+
+        // ── PASO 4: enviar archivo ────────────────────────────────────────
+        try {
+            if (tipo === "audio") {
+                await sock.sendMessage(jid, {
+                    audio: fs.readFileSync(descarga.path),
+                    mimetype: "audio/mpeg",
+                    ptt: false
+                });
+            } else {
+                await sock.sendMessage(jid, {
+                    video: fs.readFileSync(descarga.path),
+                    mimetype: "video/mp4",
+                    caption: `🎬 *${meta.title}*`
+                });
+            }
+        } catch (sendErr) {
+            console.error("[PLAY] Error al enviar:", sendErr.message);
+            await sock.sendMessage(jid, {
+                text: `❌ No se pudo enviar el archivo.\n*Motivo:* ${sendErr.message}`
+            }).catch(() => {});
+        } finally {
+            fs.unlink(descarga.path, (err) => {
+                if (err) console.warn("[PLAY] No se pudo eliminar:", descarga.path);
+            });
+        }
     }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        ruta = os.path.join(carpeta, f"{info['id']}.mp3")
-        size = os.path.getsize(ruta) if os.path.exists(ruta) else 0
-        return ruta, size
-
-def bajar_video(url, carpeta):
-    opts = {
-        "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-        "merge_output_format": "mp4",
-        "outtmpl": os.path.join(carpeta, "%(id)s.%(ext)s"),
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-    }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        ruta = os.path.join(carpeta, f"{info['id']}.mp4")
-        size = os.path.getsize(ruta) if os.path.exists(ruta) else 0
-        return ruta, size
-
-def formato_peso(b):
-    if b == 0:
-        return "Desconocido"
-    if b < 1024 * 1024:
-        return f"{b / 1024:.1f} KB"
-    return f"{b / 1024 / 1024:.1f} MB"
-
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print(json.dumps({"ok": False, "error": "Uso: playt.py <info|audio|video> <query|url> <carpeta>"}))
-        sys.exit(1)
-
-    modo    = sys.argv[1]
-    query   = sys.argv[2]
-    carpeta = sys.argv[3]
-
-    os.makedirs(carpeta, exist_ok=True)
-
-    try:
-        # ── Modo info: solo busca metadata, no descarga ───────────────────
-        if modo == "info":
-            meta = obtener_info(query)
-            if not meta:
-                print(json.dumps({"ok": False, "error": "No se encontraron resultados en YouTube."}))
-                sys.exit(1)
-
-            duracion = meta["duration"]
-            print(json.dumps({
-                "ok":           True,
-                "url":          meta["url"],
-                "title":        meta["title"],
-                "uploader":     meta["uploader"],
-                "duration":     duracion,
-                "thumbnail":    meta["thumbnail"],
-                "blocked_audio": duracion > MAX_AUDIO_SECONDS,
-                "blocked_video": duracion > MAX_VIDEO_SECONDS,
-            }))
-            sys.exit(0)
-
-        # ── Modo audio/video: descarga por URL directa ────────────────────
-        if modo == "audio":
-            ruta, size = bajar_audio(query, carpeta)  # query = url aquí
-        elif modo == "video":
-            ruta, size = bajar_video(query, carpeta)
-        else:
-            print(json.dumps({"ok": False, "error": f"Modo inválido: {modo}"}))
-            sys.exit(1)
-
-        print(json.dumps({
-            "ok":   True,
-            "path": ruta,
-            "size": formato_peso(size)
-        }))
-
-    except Exception as e:
-        print(json.dumps({"ok": False, "error": str(e)}))
+};
