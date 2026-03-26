@@ -23,7 +23,6 @@ def obtener_info(query):
                 "uploader": entry.get("uploader") or entry.get("channel", "Desconocido"),
                 "duration": entry.get("duration", 0),
                 "thumbnail": entry.get("thumbnail", ""),
-                "filesize": entry.get("filesize") or entry.get("filesize_approx", 0)
             }
     return None
 
@@ -70,7 +69,7 @@ def formato_peso(b):
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
-        print(json.dumps({"ok": False, "error": "Uso: playt.py <audio|video> <query> <carpeta>"}))
+        print(json.dumps({"ok": False, "error": "Uso: playt.py <info|audio|video> <query|url> <carpeta>"}))
         sys.exit(1)
 
     modo    = sys.argv[1]
@@ -80,34 +79,39 @@ if __name__ == "__main__":
     os.makedirs(carpeta, exist_ok=True)
 
     try:
-        meta = obtener_info(query)
-        if not meta:
-            print(json.dumps({"ok": False, "error": "No se encontraron resultados en YouTube."}))
-            sys.exit(1)
+        # ── Modo info: solo busca metadata, no descarga ───────────────────
+        if modo == "info":
+            meta = obtener_info(query)
+            if not meta:
+                print(json.dumps({"ok": False, "error": "No se encontraron resultados en YouTube."}))
+                sys.exit(1)
 
-        duracion = meta["duration"]
-        limite = MAX_AUDIO_SECONDS if modo == "audio" else MAX_VIDEO_SECONDS
-
-        if duracion > limite:
-            print(json.dumps({"ok": False, "blocked": True, "duration": duracion, "mode": modo}))
+            duracion = meta["duration"]
+            print(json.dumps({
+                "ok":           True,
+                "url":          meta["url"],
+                "title":        meta["title"],
+                "uploader":     meta["uploader"],
+                "duration":     duracion,
+                "thumbnail":    meta["thumbnail"],
+                "blocked_audio": duracion > MAX_AUDIO_SECONDS,
+                "blocked_video": duracion > MAX_VIDEO_SECONDS,
+            }))
             sys.exit(0)
 
+        # ── Modo audio/video: descarga por URL directa ────────────────────
         if modo == "audio":
-            ruta, size = bajar_audio(meta["url"], carpeta)
+            ruta, size = bajar_audio(query, carpeta)  # query = url aquí
         elif modo == "video":
-            ruta, size = bajar_video(meta["url"], carpeta)
+            ruta, size = bajar_video(query, carpeta)
         else:
             print(json.dumps({"ok": False, "error": f"Modo inválido: {modo}"}))
             sys.exit(1)
 
         print(json.dumps({
-            "ok":       True,
-            "path":     ruta,
-            "title":    meta["title"],
-            "uploader": meta["uploader"],
-            "duration": duracion,
-            "thumbnail": meta["thumbnail"],
-            "size":     formato_peso(size)
+            "ok":   True,
+            "path": ruta,
+            "size": formato_peso(size)
         }))
 
     except Exception as e:
