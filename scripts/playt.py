@@ -11,26 +11,21 @@ def obtener_info(query):
     opts = {
         "quiet": True,
         "no_warnings": True,
-        "extract_flat": True,
-        "default_search": "ytsearch1"
+        "default_search": "ytsearch1",
+        # ← quita extract_flat, obtiene info completa directo
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
-        data = ydl.extract_info(query, download=False)
+        data = ydl.extract_info(f"ytsearch1:{query}", download=False)
         if "entries" in data and data["entries"]:
             entry = data["entries"][0]
-            video_url = f"https://www.youtube.com/watch?v={entry['id']}"
-
-            # Segunda llamada para obtener info completa (thumbnail, uploader, etc.)
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl2:
-                full = ydl2.extract_info(video_url, download=False)
-                return {
-                    "url":       video_url,
-                    "title":     full.get("title", "Sin título"),
-                    "uploader":  full.get("uploader") or full.get("channel", "Desconocido"),
-                    "duration":  full.get("duration", 0),
-                    "thumbnail": full.get("thumbnail", ""),
-                    "filesize":  full.get("filesize") or full.get("filesize_approx", 0)
-                }
+            return {
+                "url":       f"https://www.youtube.com/watch?v={entry['id']}",
+                "title":     entry.get("title", "Sin título"),
+                "uploader":  entry.get("uploader") or entry.get("channel", "Desconocido"),
+                "duration":  entry.get("duration", 0),
+                "thumbnail": entry.get("thumbnail", ""),
+                "filesize":  entry.get("filesize") or entry.get("filesize_approx", 0)
+            }
     return None
 
 def bajar_audio(url, carpeta):
