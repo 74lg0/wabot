@@ -2,7 +2,7 @@
 import sys
 import os
 import json
-import yt_dlp
+import yt_dlp #type: ignore
 
 MAX_AUDIO_SECONDS = 15 * 60
 MAX_VIDEO_SECONDS = 10 * 60
@@ -17,7 +17,6 @@ def obtener_info(query, es_url=False):
         busqueda = query if es_url else f"ytsearch1:{query}"
         data = ydl.extract_info(busqueda, download=False)
 
-        # Si es URL directa, data tiene la info directamente
         entry = data if es_url else (data.get("entries") or [None])[0]
         if not entry:
             return None
@@ -33,7 +32,7 @@ def obtener_info(query, es_url=False):
 def bajar_audio(url, carpeta):
     opts = {
         "format": "bestaudio",
-        "outtmpl": os.path.join(carpeta, "%(title)s.%(ext)s"),
+        "outtmpl": os.path.join(carpeta, "%(id)s.%(ext)s"),  # ← usar ID en vez de título
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -45,7 +44,7 @@ def bajar_audio(url, carpeta):
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        ruta = os.path.join(carpeta, f"{info['title']}.mp3")
+        ruta = os.path.join(carpeta, f"{info['id']}.mp3")
         size = os.path.getsize(ruta) if os.path.exists(ruta) else 0
         return ruta, size
 
@@ -53,14 +52,14 @@ def bajar_video(url, carpeta):
     opts = {
         "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
         "merge_output_format": "mp4",
-        "outtmpl": os.path.join(carpeta, "%(title)s.%(ext)s"),
+        "outtmpl": os.path.join(carpeta, "%(id)s.%(ext)s"),  # ← usar ID
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        ruta = os.path.join(carpeta, f"{info['title']}.mp4")
+        ruta = os.path.join(carpeta, f"{info['id']}.mp4")
         size = os.path.getsize(ruta) if os.path.exists(ruta) else 0
         return ruta, size
 
@@ -70,6 +69,19 @@ def formato_peso(b):
     if b < 1024 * 1024:
         return f"{b / 1024:.1f} KB"
     return f"{b / 1024 / 1024:.1f} MB"
+
+def emitir_info(meta):
+    duracion = meta["duration"]
+    print(json.dumps({
+        "ok":            True,
+        "url":           meta["url"],
+        "title":         meta["title"],
+        "uploader":      meta["uploader"],
+        "duration":      duracion,
+        "thumbnail":     meta["thumbnail"],
+        "blocked_audio": duracion > MAX_AUDIO_SECONDS,
+        "blocked_video": duracion > MAX_VIDEO_SECONDS,
+    }))
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
@@ -83,45 +95,22 @@ if __name__ == "__main__":
     os.makedirs(carpeta, exist_ok=True)
 
     try:
-        # ── info por búsqueda de texto ────────────────────────────────────
         if modo == "info":
             meta = obtener_info(query, es_url=False)
             if not meta:
                 print(json.dumps({"ok": False, "error": "No se encontraron resultados en YouTube."}))
                 sys.exit(1)
-            duracion = meta["duration"]
-            print(json.dumps({
-                "ok":            True,
-                "url":           meta["url"],
-                "title":         meta["title"],
-                "uploader":      meta["uploader"],
-                "duration":      duracion,
-                "thumbnail":     meta["thumbnail"],
-                "blocked_audio": duracion > MAX_AUDIO_SECONDS,
-                "blocked_video": duracion > MAX_VIDEO_SECONDS,
-            }))
+            emitir_info(meta)
             sys.exit(0)
 
-        # ── info por URL directa ──────────────────────────────────────────
         if modo == "info-url":
             meta = obtener_info(query, es_url=True)
             if not meta:
                 print(json.dumps({"ok": False, "error": "No se pudo obtener info del enlace."}))
                 sys.exit(1)
-            duracion = meta["duration"]
-            print(json.dumps({
-                "ok":            True,
-                "url":           meta["url"],
-                "title":         meta["title"],
-                "uploader":      meta["uploader"],
-                "duration":      duracion,
-                "thumbnail":     meta["thumbnail"],
-                "blocked_audio": duracion > MAX_AUDIO_SECONDS,
-                "blocked_video": duracion > MAX_VIDEO_SECONDS,
-            }))
+            emitir_info(meta)
             sys.exit(0)
 
-        # ── descarga ──────────────────────────────────────────────────────
         if modo == "audio":
             ruta, size = bajar_audio(query, carpeta)
         elif modo == "video":
