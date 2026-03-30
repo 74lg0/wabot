@@ -89,7 +89,52 @@ install_node() {
 }
 
 # ─────────────────────────────────────────
-#  Instalar dependencias
+#  Instalar PM2
+# ─────────────────────────────────────────
+install_pm2() {
+  if command -v pm2 &>/dev/null; then
+    log "PM2 ya instalado: $(pm2 -v)"
+    return
+  fi
+
+  info "Instalando PM2 globalmente..."
+  npm install -g pm2
+  log "PM2 instalado: $(pm2 -v)"
+}
+
+# ─────────────────────────────────────────
+#  Instalar yt-dlp (Python)
+# ─────────────────────────────────────────
+install_ytdlp() {
+  if command -v yt-dlp &>/dev/null; then
+    log "yt-dlp ya instalado: $(yt-dlp --version)"
+    return
+  fi
+
+  info "Instalando yt-dlp..."
+
+  if [[ "$ENV" == "termux" ]]; then
+    pip3 install -U yt-dlp          # ← corregido
+  else
+    if command -v pip3 &>/dev/null; then
+      pip3 install -U yt-dlp
+    elif command -v pip &>/dev/null; then
+      pip install -U yt-dlp
+    elif command -v pipx &>/dev/null; then
+      pipx install yt-dlp
+    else
+      info "pip no encontrado, descargando yt-dlp como binario..."
+      sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+        -o /usr/local/bin/yt-dlp
+      sudo chmod +x /usr/local/bin/yt-dlp
+    fi
+  fi
+
+  log "yt-dlp instalado: $(yt-dlp --version)"
+}
+
+# ─────────────────────────────────────────
+#  Instalar dependencias npm
 # ─────────────────────────────────────────
 install_deps() {
   [[ -f package.json ]] || error "No se encontró package.json"
@@ -115,6 +160,8 @@ check_files() {
 main() {
   select_env
   install_node
+  install_pm2
+  install_ytdlp
   install_deps
   check_files
 
