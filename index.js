@@ -22,7 +22,7 @@ const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
 
 // ── Cargar comandos ───────────────────────────────────────────────────────────
 const comandos = cargarComandos();
-console.log(`📦 ${comandos.size} entradas de comandos cargadas\n`);
+console.log(`[!] ${comandos.size} entradas de comandos cargadas\n`);
 
 // ── Arranque del bot ──────────────────────────────────────────────────────────
 async function iniciarBot() {
@@ -43,7 +43,7 @@ async function iniciarBot() {
     manejarMensajes(sock, comandos, config);
     iniciarScheduler(sock); // ← dentro de iniciarBot, donde sock ya existe
 
-    console.log(`🤖 Bot iniciado | Prefijo: "${config.prefix}" | v${version.join(".")}`);
+    console.log(`[!] Bot iniciado | Prefijo: "${config.prefix}" | v${version.join(".")}`);
 }
 
 iniciarBot();

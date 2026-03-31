@@ -10,11 +10,11 @@ function manejarConexion(sock, reiniciar) {
             const codigo = lastDisconnect?.error?.output?.statusCode;
 
             if (codigo === DisconnectReason.loggedOut) {
-                console.log("❌ Sesión expirada. Corre login.js nuevamente.");
+                console.log("[X] Sesión expirada. Corre login.js nuevamente.");
                 process.exit(1); // no intentar reconectar sin credenciales válidas
             }
 
-            console.log(`🔴 Conexión cerrada (${codigo ?? "desconocido"}). Reconectando en 5s...`);
+            console.log(`[!] Conexión cerrada (${codigo ?? "desconocido"}). Reconectando en 5s...`);
             sock.ev.removeAllListeners();
             setTimeout(reiniciar, 5000);
         }

@@ -50,7 +50,7 @@ function manejarMensajes(sock, comandos, config) {
         } catch (err) {
             console.error(`[ERROR] Comando "${nombreCmd}":`, err);
             await sock.sendMessage(jid, {
-                text: `❌ Error al ejecutar *${nombreCmd}*`
+                text: `[ERROR] Error al ejecutar *${nombreCmd}*`
             }).catch(() => {});
         }
     });
